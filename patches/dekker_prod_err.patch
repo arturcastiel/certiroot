@@ -1,0 +1,239 @@
+--- csrc/mas.cpp
++++ csrc/mas.cpp
+@@ -39,6 +39,17 @@
+ using PolyR = std::vector<double>;
+ 
+ constexpr double EPS = 2.220446049250313e-16;
++// Exact error of the product p = fl(a*b): hardware FMA when available, Dekker's split otherwise.
++// Dekker is exact for |a|, |b| < 2^995 and no underflow in the partial products (unreviewed for MAS).
++#if defined(__FMA__) || defined(FP_FAST_FMA)
++inline double prod_err(double a, double b, double p) { return std::fma(a, b, -p); }
++#else
++inline double prod_err(double a, double b, double p) {
++    const double ca = 134217729.0 * a, ah = ca - (ca - a), al = a - ah;
++    const double cb = 134217729.0 * b, bh = cb - (cb - b), bl = b - bh;
++    return ((ah * bh - p) + ah * bl + al * bh) + al * bl;
++}
++#endif
+ // Output guarantee: each component of a root is correctly rounded (round-to-nearest-even of the exact
+ // value), proven by its enclosure not containing a rounding boundary. A component tiny next to |root|
+ // (e.g. the real part of a purely imaginary root) can't always be decided; it is accepted once its
+@@ -834,8 +845,8 @@
+         const double hk = Scaled ? hi[k] * sc : hi[k], lk = Scaled ? lo[k] * sc : lo[k];
+         // d_k = d_{k-1} z + s_{k-1}; e also absorbs c_{k-1}, the error of s_{k-1}
+         const double a1 = dr * x, a2 = di * y, a3 = dr * y, a4 = di * x;
+-        const double b1 = std::fma(dr, x, -a1), b2 = std::fma(di, y, -a2);
+-        const double b3 = std::fma(dr, y, -a3), b4 = std::fma(di, x, -a4);
++        const double b1 = prod_err(dr, x, a1), b2 = prod_err(di, y, a2);
++        const double b3 = prod_err(dr, y, a3), b4 = prod_err(di, x, a4);
+         double h1, g1, h2, g2, ndr, g3, ndi, g4;
+         two_sum(a1, -a2, h1, g1);
+         two_sum(h1, sr, ndr, g3);
+@@ -845,8 +856,8 @@
+         const double nei = (er * y + ei * x) + (((b3 + b4) + (g2 + g4)) + ci);
+         // s_k = s_{k-1} z + a_k
+         const double m1 = sr * x, m2 = si * y, m3 = sr * y, m4 = si * x;
+-        const double e1 = std::fma(sr, x, -m1), e2 = std::fma(si, y, -m2);
+-        const double e3 = std::fma(sr, y, -m3), e4 = std::fma(si, x, -m4);
++        const double e1 = prod_err(sr, x, m1), e2 = prod_err(si, y, m2);
++        const double e3 = prod_err(sr, y, m3), e4 = prod_err(si, x, m4);
+         double h3, f1, nsr, f3, nsi, f2;
+         two_sum(m1, -m2, h3, f1);
+         two_sum(h3, hk, nsr, f3);
+@@ -913,11 +924,11 @@
+         for (int l = 0; l < EW; ++l) {
+             const double x_ = X[l], y_ = Y[l];
+             if constexpr (Real) {
+-                const double a1 = dr[l] * x_, b1 = std::fma(dr[l], x_, -a1);
++                const double a1 = dr[l] * x_, b1 = prod_err(dr[l], x_, a1);
+                 double ndr, g3;
+                 two_sum(a1, sr[l], ndr, g3);
+                 const double ner = er[l] * x_ + ((b1 + g3) + cr[l]);
+-                const double m1 = sr[l] * x_, e1 = std::fma(sr[l], x_, -m1);
++                const double m1 = sr[l] * x_, e1 = prod_err(sr[l], x_, m1);
+                 double nsr, f3;
+                 two_sum(m1, hk, nsr, f3);
+                 const double ncr = cr[l] * x_ + ((e1 + f3) + lk);
+@@ -928,8 +939,8 @@
+                 dr[l] = ndr, er[l] = ner, sr[l] = nsr, cr[l] = ncr;
+             } else {
+                 const double a1 = dr[l] * x_, a2 = di[l] * y_, a3 = dr[l] * y_, a4 = di[l] * x_;
+-                const double b1 = std::fma(dr[l], x_, -a1), b2 = std::fma(di[l], y_, -a2);
+-                const double b3 = std::fma(dr[l], y_, -a3), b4 = std::fma(di[l], x_, -a4);
++                const double b1 = prod_err(dr[l], x_, a1), b2 = prod_err(di[l], y_, a2);
++                const double b3 = prod_err(dr[l], y_, a3), b4 = prod_err(di[l], x_, a4);
+                 double h1, g1, h2, g2, ndr, g3, ndi, g4;
+                 two_sum(a1, -a2, h1, g1);
+                 two_sum(h1, sr[l], ndr, g3);
+@@ -938,8 +949,8 @@
+                 const double ner = (er[l] * x_ - ei[l] * y_) + (((b1 - b2) + (g1 + g3)) + cr[l]);
+                 const double nei = (er[l] * y_ + ei[l] * x_) + (((b3 + b4) + (g2 + g4)) + ci[l]);
+                 const double m1 = sr[l] * x_, m2 = si[l] * y_, m3 = sr[l] * y_, m4 = si[l] * x_;
+-                const double e1 = std::fma(sr[l], x_, -m1), e2 = std::fma(si[l], y_, -m2);
+-                const double e3 = std::fma(sr[l], y_, -m3), e4 = std::fma(si[l], x_, -m4);
++                const double e1 = prod_err(sr[l], x_, m1), e2 = prod_err(si[l], y_, m2);
++                const double e3 = prod_err(sr[l], y_, m3), e4 = prod_err(si[l], x_, m4);
+                 double h3, f1, nsr, f3, nsi, f2;
+                 two_sum(m1, -m2, h3, f1);
+                 two_sum(h3, hk, nsr, f3);
+@@ -1103,11 +1114,11 @@
+             // p' chain: D_j <- D_j z + (errors of D_{j-1}) + C_j(old)
+             {
+                 const double a1 = dr[j] * x;
+-                odR[mdR++] = std::fma(dr[j], x, -a1);
++                odR[mdR++] = prod_err(dr[j], x, a1);
+                 h = a1;
+                 if (!Real) {
+                     const double a2 = di[j] * y;
+-                    odR[mdR++] = -std::fma(di[j], y, -a2);
++                    odR[mdR++] = -prod_err(di[j], y, a2);
+                     two_sum(h, -a2, h, e); odR[mdR++] = e;
+                 }
+                 two_sum(h, cr[j], h, e); odR[mdR++] = e;
+@@ -1116,8 +1127,8 @@
+                 double ndi = 0.0;
+                 if (!Real) {
+                     const double a3 = dr[j] * y, a4 = di[j] * x;
+-                    odI[mdI++] = std::fma(dr[j], y, -a3);
+-                    odI[mdI++] = std::fma(di[j], x, -a4);
++                    odI[mdI++] = prod_err(dr[j], y, a3);
++                    odI[mdI++] = prod_err(di[j], x, a4);
+                     two_sum(a3, a4, h, e); odI[mdI++] = e;
+                     two_sum(h, ci[j], h, e); odI[mdI++] = e;
+                     for (int q = 0; q < ndI; ++q) { two_sum(h, dI[q], h, e); odI[mdI++] = e; }
+@@ -1128,11 +1139,11 @@
+             // p chain: C_j <- C_j z + (errors of C_{j-1}); level 1 adds the coefficient hi[k]
+             {
+                 const double m1 = cr[j] * x;
+-                oR[mR++] = std::fma(cr[j], x, -m1);
++                oR[mR++] = prod_err(cr[j], x, m1);
+                 h = m1;
+                 if (!Real) {
+                     const double m2 = ci[j] * y;
+-                    oR[mR++] = -std::fma(ci[j], y, -m2);
++                    oR[mR++] = -prod_err(ci[j], y, m2);
+                     two_sum(h, -m2, h, e); oR[mR++] = e;
+                 }
+                 for (int q = 0; q < nR; ++q) { two_sum(h, inR[q], h, e); oR[mR++] = e; }
+@@ -1140,8 +1151,8 @@
+                 double nci = 0.0;
+                 if (!Real) {
+                     const double m3 = cr[j] * y, m4 = ci[j] * x;
+-                    oI[mI++] = std::fma(cr[j], y, -m3);
+-                    oI[mI++] = std::fma(ci[j], x, -m4);
++                    oI[mI++] = prod_err(cr[j], y, m3);
++                    oI[mI++] = prod_err(ci[j], x, m4);
+                     two_sum(m3, m4, h, e); oI[mI++] = e;
+                     for (int q = 0; q < nI; ++q) { two_sum(h, inI[q], h, e); oI[mI++] = e; }
+                     nci = h;
+@@ -1250,11 +1261,11 @@
+         {
+             int m = 0, mi = 0;
+             const double a1 = d1r * x;
+-            i1D[m++] = std::fma(d1r, x, -a1);
++            i1D[m++] = prod_err(d1r, x, a1);
+             h = a1;
+             if (!Real) {
+                 const double a2 = d1i * y;
+-                i1D[m++] = -std::fma(d1i, y, -a2);
++                i1D[m++] = -prod_err(d1i, y, a2);
+                 two_sum(h, -a2, h, e); i1D[m++] = e;
+             }
+             two_sum(h, c1r, h, e); i1D[m++] = e;
+@@ -1262,8 +1273,8 @@
+             double ndi = 0.0;
+             if (!Real) {
+                 const double a3 = d1r * y, a4 = d1i * x;
+-                i1E[mi++] = std::fma(d1r, y, -a3);
+-                i1E[mi++] = std::fma(d1i, x, -a4);
++                i1E[mi++] = prod_err(d1r, y, a3);
++                i1E[mi++] = prod_err(d1i, x, a4);
+                 two_sum(a3, a4, h, e); i1E[mi++] = e;
+                 two_sum(h, c1i, h, e); i1E[mi++] = e;
+                 ndi = h;
+@@ -1273,11 +1284,11 @@
+         {
+             int m = 0, mi = 0;
+             const double m1 = c1r * x;
+-            i1R[m++] = std::fma(c1r, x, -m1);
++            i1R[m++] = prod_err(c1r, x, m1);
+             h = m1;
+             if (!Real) {
+                 const double m2 = c1i * y;
+-                i1R[m++] = -std::fma(c1i, y, -m2);
++                i1R[m++] = -prod_err(c1i, y, m2);
+                 two_sum(h, -m2, h, e); i1R[m++] = e;
+             }
+             two_sum(h, hk, h, e); i1R[m++] = e;
+@@ -1285,8 +1296,8 @@
+             double nci = 0.0;
+             if (!Real) {
+                 const double m3 = c1r * y, m4 = c1i * x;
+-                i1I[mi++] = std::fma(c1r, y, -m3);
+-                i1I[mi++] = std::fma(c1i, x, -m4);
++                i1I[mi++] = prod_err(c1r, y, m3);
++                i1I[mi++] = prod_err(c1i, x, m4);
+                 two_sum(m3, m4, h, e); i1I[mi++] = e;
+                 nci = h;
+             }
+@@ -1297,11 +1308,11 @@
+         {
+             int m = 0, mi = 0;
+             const double a1 = d2r * x;
+-            i2D[m++] = std::fma(d2r, x, -a1);
++            i2D[m++] = prod_err(d2r, x, a1);
+             h = a1;
+             if (!Real) {
+                 const double a2 = d2i * y;
+-                i2D[m++] = -std::fma(d2i, y, -a2);
++                i2D[m++] = -prod_err(d2i, y, a2);
+                 two_sum(h, -a2, h, e); i2D[m++] = e;
+             }
+             two_sum(h, c2r, h, e); i2D[m++] = e;
+@@ -1311,8 +1322,8 @@
+             double ndi = 0.0;
+             if (!Real) {
+                 const double a3 = d2r * y, a4 = d2i * x;
+-                i2E[mi++] = std::fma(d2r, y, -a3);
+-                i2E[mi++] = std::fma(d2i, x, -a4);
++                i2E[mi++] = prod_err(d2r, y, a3);
++                i2E[mi++] = prod_err(d2i, x, a4);
+                 two_sum(a3, a4, h, e); i2E[mi++] = e;
+                 two_sum(h, c2i, h, e); i2E[mi++] = e;
+ #pragma GCC unroll 8
+@@ -1324,11 +1335,11 @@
+         {
+             int m = 0, mi = 0;
+             const double m1 = c2r * x;
+-            i2R[m++] = std::fma(c2r, x, -m1);
++            i2R[m++] = prod_err(c2r, x, m1);
+             h = m1;
+             if (!Real) {
+                 const double m2 = c2i * y;
+-                i2R[m++] = -std::fma(c2i, y, -m2);
++                i2R[m++] = -prod_err(c2i, y, m2);
+                 two_sum(h, -m2, h, e); i2R[m++] = e;
+             }
+ #pragma GCC unroll 8
+@@ -1337,8 +1348,8 @@
+             double nci = 0.0;
+             if (!Real) {
+                 const double m3 = c2r * y, m4 = c2i * x;
+-                i2I[mi++] = std::fma(c2r, y, -m3);
+-                i2I[mi++] = std::fma(c2i, x, -m4);
++                i2I[mi++] = prod_err(c2r, y, m3);
++                i2I[mi++] = prod_err(c2i, x, m4);
+                 two_sum(m3, m4, h, e); i2I[mi++] = e;
+ #pragma GCC unroll 8
+                 for (int q = 0; q < N1I; ++q) { two_sum(h, i1I[q], h, e); i2I[mi++] = e; }
+@@ -1723,8 +1734,8 @@
+     double na = std::sqrt(nr * nr + ni * ni), eN;
+     if (lo) {
+         // R = p - N0 q with the products split exactly (fma); tail terms are O(u |p|)
+-        const double h1 = nr * qr, e1 = std::fma(nr, qr, -h1), h2 = ni * qi, e2 = std::fma(ni, qi, -h2);
+-        const double h3 = nr * qi, e3 = std::fma(nr, qi, -h3), h4 = ni * qr, e4 = std::fma(ni, qr, -h4);
++        const double h1 = nr * qr, e1 = prod_err(nr, qr, h1), h2 = ni * qi, e2 = prod_err(ni, qi, h2);
++        const double h3 = nr * qi, e3 = prod_err(nr, qi, h3), h4 = ni * qr, e4 = prod_err(ni, qr, h4);
+         double a, ea, b, eb;
+         two_sum(pr, -h1, a, ea);
+         two_sum(a, h2, b, eb);

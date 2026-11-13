@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "certiroot"
+version = "0.1.0"
+description = "Certified, correctly rounded polynomial roots with exact multiplicities, faster than numpy.roots"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Artur Castiel" }]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.21"]
+keywords = ["polynomial", "roots", "root-finding", "aberth", "correct-rounding", "certified-computation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "python-flint"]
+study = ["python-flint", "scipy", "matplotlib"]
+
+[project.urls]
+Homepage = "https://github.com/arturcastiel/certiroot"
+Issues = "https://github.com/arturcastiel/certiroot/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"

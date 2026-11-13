@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}${{ matrix.arch && format(' / {0}', matrix.arch) || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.12", arch: none }   # portable build, no -march=native
+          - { os: macos-14, python: "3.12" }                    # Apple Silicon, clang
+    env:
+      CERTIROOT_ARCH: ${{ matrix.arch || 'native' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install GMP (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev
+      - name: Install GMP (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gmp
+      - name: Build and install
+        run: python -m pip install -v . pytest
+      - name: Install Arb reference (optional)
+        run: python -m pip install --only-binary :all: python-flint || echo "python-flint unavailable; certified tests will be skipped"
+      - name: Test
+        working-directory: tests
+        run: python -m pytest -v -rs

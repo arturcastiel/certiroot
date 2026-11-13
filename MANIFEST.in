@@ -1,0 +1,2 @@
+include csrc/mas.cpp
+recursive-include tests *.py
