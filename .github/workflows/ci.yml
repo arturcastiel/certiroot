@@ -13,15 +13,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.10" }
           - { os: ubuntu-latest, python: "3.13" }
           - { os: ubuntu-latest, python: "3.12", arch: none }   # portable build, no -march=native
-          - { os: macos-14, python: "3.12" }                    # Apple Silicon, clang
+          - { os: macos-latest, python: "3.13" }                # Apple Silicon, clang
     env:
       CERTIROOT_ARCH: ${{ matrix.arch || 'native' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install GMP (Linux)

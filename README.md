@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/arturcastiel/certiroot/actions/workflows/ci.yml/badge.svg)](https://github.com/arturcastiel/certiroot/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
 ```python
 >>> import numpy as np, certiroot
