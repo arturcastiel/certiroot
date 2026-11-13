@@ -331,7 +331,7 @@ struct IntPoly {
         for (size_t i = 0; i <= n; ++i)
             if (m[i]) {
                 sh[i] = (u64)(lo[i] - emin);
-                bits = std::max(bits, (size_t)(64 - __builtin_clzll(m[i])) + sh[i]);
+                bits = std::max<size_t>(bits, (size_t)(64 - __builtin_clzll(m[i])) + sh[i]);
             }
     }
     PolyM image(const ModQ& M) const {  // untrimmed
